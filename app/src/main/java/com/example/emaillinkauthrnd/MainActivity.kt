@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
         mAuth = FirebaseAuth.getInstance()
 
         val actionCodeSettings = ActionCodeSettings.newBuilder()
-            .setUrl("https://google.com/finishSignUp")
+            .setUrl("https://bizdeappuserlogin.com/finishSignUp")
             .setHandleCodeInApp(true)
             .setAndroidPackageName("com.example.emaillinkauthrnd", true, null)
             .build()
@@ -46,6 +46,8 @@ class MainActivity : AppCompatActivity() {
 
                             val intent = Intent(this,MailSentActivity::class.java)
                             startActivity(intent)
+                        }else{
+                            Log.d(TAG, "Email not sent. " +it.exception)
                         }
                     }
             } else {

@@ -19,6 +19,8 @@ import com.google.firebase.dynamiclinks.ktx.dynamicLinks
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.android.synthetic.main.activity_login_options.*
+import java.lang.Exception
+import java.util.logging.Logger
 
 class LoginOptionsActivity : AppCompatActivity() {
 
@@ -31,20 +33,26 @@ class LoginOptionsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login_options)
 
+        Log.e(TAG, "onCreate work")
+
         mAuth = FirebaseAuth.getInstance()
 
         if (mAuth.currentUser != null) {
-            finish()
+            Log.e(TAG, "current user not null")
+
             val intent2 = Intent(applicationContext, FeedActivity::class.java)
             startActivity(intent2)
             finish()
         } else {
+            Log.e(TAG, "current user is null")
             val lastSignedUser = GoogleSignIn.getLastSignedInAccount(this)
-            if (lastSignedUser != null){
+            if (lastSignedUser != null) {
                 btnGoogle.text = "${lastSignedUser.displayName} olarak giriş yap"
             }
-            checkVerifyEmail()
+            //checkVerifyEmail()
         }
+
+        handleIntent(intent)
 
         btnEmail.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
@@ -55,6 +63,73 @@ class LoginOptionsActivity : AppCompatActivity() {
             signInWithGoogle()
         }
 
+
+    }
+
+    private fun handleIntent(intent: Intent) {
+        Firebase.dynamicLinks
+            .getDynamicLink(intent)
+            .addOnSuccessListener(this) { pendingDynamicLinkData ->
+                val deepLink: Uri?
+                Log.e(TAG, "pending")
+
+                if (pendingDynamicLinkData != null) {
+                    deepLink = pendingDynamicLinkData.link
+
+                    val intent = intent
+                    val link = intent.data.toString()
+
+                    if (link.contains("bizdeappuserlogin")) {
+
+                        if (mAuth.isSignInWithEmailLink(link)) {
+                            Log.e(TAG, "worked, $link")
+                            Toast.makeText(this, "Worked: $link", Toast.LENGTH_LONG).show()
+
+                            val email =
+                                GlobalCache.userEmailAddress // Email should be fetched sharedPreferences. Because, if app is close, this email not found..
+
+                            if (email != null) {
+                                mAuth.signInWithEmailLink(email, link)
+                                    .addOnCompleteListener {
+                                        if (it.isSuccessful) {
+                                            Log.e(TAG, "Successfully signed in with email link!")
+                                            val result = it.result
+
+                                            Log.e(TAG, result?.user?.email.toString())
+                                            Log.e(TAG, result?.user?.uid.toString())
+
+                                            val intent2 = Intent(this, FeedActivity::class.java)
+                                            startActivity(intent2)
+                                            finish()
+                                        } else {
+                                            Log.e(
+                                                TAG,
+                                                "Error signing in with email link",
+                                                it.exception
+                                            )
+
+                                            Toast.makeText(
+                                                this,
+                                                "Bir hatayla karşılaşıldı. Lütfen tekrar deneyin",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    }
+                            }
+                        } else {
+                            Log.e(TAG, "not worked ")
+                        }
+
+                    } else {
+                        var contentLink = deepLink?.path.toString()
+                        contentLink = contentLink.substring(contentLink.lastIndexOf("=") + 1)
+                        ItemDetailsActivity.startActivity(this, contentLink)
+                        finish()
+                    }
+                } else {
+                    Log.e(TAG, "deeplink null")
+                }
+            }.addOnFailureListener(this) { e -> Log.w(TAG, "getDynamicLink:onFailure", e) }
 
     }
 
@@ -71,58 +146,12 @@ class LoginOptionsActivity : AppCompatActivity() {
 
     }
 
-    private fun checkVerifyEmail() {
-        Firebase.dynamicLinks
-            .getDynamicLink(intent)
-            .addOnSuccessListener(this) {
-                val deepLink: Uri?
-                if (it != null) {
-                    deepLink = it.link
-                    Log.e(TAG, deepLink?.path.toString())
-
-
-                    val intent = intent
-                    val emailLink = intent.data.toString()
-
-                    if (mAuth.isSignInWithEmailLink(emailLink)) {
-                        Log.e(TAG, "worked, $emailLink")
-                        Toast.makeText(this,"Worked: $emailLink", Toast.LENGTH_LONG).show()
-
-                        val email = GlobalCache.userEmailAddress // Email should be fetched sharedPreferences. Because, if app is close, this email not found..
-
-                        if (email != null) {
-                            mAuth.signInWithEmailLink(email, emailLink)
-                                .addOnCompleteListener {
-                                    if (it.isSuccessful) {
-                                        Log.e(TAG, "Successfully signed in with email link!")
-                                        val result = it.result
-
-                                        Log.e(TAG, result?.user?.email.toString())
-                                        Log.e(TAG, result?.user?.uid.toString())
-
-                                        val intent2 = Intent(this, FeedActivity::class.java)
-                                        startActivity(intent2)
-                                        finish()
-                                    } else {
-                                        Log.e(TAG, "Error signing in with email link", it.exception)
-
-                                        Toast.makeText(
-                                            this,
-                                            "Bir hatayla karşılaşıldı. Lütfen tekrar deneyin",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    }
-                                }
-                        }
-                    } else {
-                        Log.e(TAG, "not worked ")
-                    }
-                } else {
-                    Log.e(TAG, "deeplink null")
-                }
-            }
-            .addOnFailureListener(this) { e -> Log.w(TAG, "getDynamicLink:onFailure", e) }
-
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        intent?.let {
+            handleIntent(it)
+        }
+        Log.e(TAG, "new intent tetiklendi")
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
